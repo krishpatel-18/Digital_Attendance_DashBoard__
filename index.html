@@ -11,7 +11,7 @@
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:#111827;min-height:100vh;padding:16px;transition:background 0.4s ease}
     .login-wrapper{min-height:100vh;display:flex;align-items:center;justify-content:center}
-    .login-card{width:100%;max-width:420px;background:#ffffff;border-radius:24px;box-shadow:0 18px 45px rgba(15,23,42,0.25);padding:24px 22px 20px}
+    .login-card{width:100%;max-width:420px;background:#ffffff;border-radius:24px;box-shadow:0 18px 45px rgba(15,23,42,0.25);padding:24px 22px 20px;position:relative}
     .login-header{text-align:center;margin-bottom:16px}
     .login-header h1{font-size:22px;margin-top:6px;margin-bottom:4px}
     .login-header p{font-size:14px;color:var(--muted)}
@@ -77,16 +77,15 @@
     .heatmap-grid{display:grid;grid-template-columns: repeat(7, 1fr); gap:6px; padding:8px}
     .heatday{height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#0b1220;background:#e5e7eb}
     .heat-legend{display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px;flex-wrap:wrap}
+    /* password field wrapper + eye icon */
+    .pw-wrap{position:relative}
+    .pw-toggle-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;padding:6px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center}
+    .pw-toggle-btn svg{width:18px;height:18px}
     /* Admin panel styles */
     #adminPanel{display:none;margin-bottom:12px}
     .admin-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .admin-list{margin-top:8px;padding:10px;background:#fff;border-radius:8px}
     .is-hidden-panel{opacity:0.45}
-
-    /* password field wrapper */
-    .password-wrapper { position: relative; display: flex; align-items: center; }
-    .password-wrapper input { flex: 1; }
-    .password-toggle { position: absolute; right: 10px; background: transparent; border: none; cursor: pointer; font-size: 16px; padding: 6px; color: #374151; }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -106,10 +105,17 @@
 
       <label class="login-label" for="loginEmail">Email</label>
       <input id="loginEmail" type="email" class="login-input" placeholder="Enter email" />
+
       <label class="login-label" for="loginPassword">Password</label>
-      <div class="password-wrapper" style="margin-bottom:10px">
+      <div class="pw-wrap">
         <input id="loginPassword" type="password" class="login-input" placeholder="Enter password" style="padding-right:40px" />
-        <button id="passwordToggle" class="password-toggle" type="button" aria-label="Show password">👁️</button>
+        <button id="togglePasswordBtn" type="button" class="pw-toggle-btn" aria-label="Show password">
+          <!-- Eye (closed/open toggled via JS) -->
+          <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path id="eyePath" d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path>
+            <circle id="pupil" cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
       </div>
 
       <button id="loginSubmit" class="login-btn"><span>🔒</span><span>Login</span></button>
@@ -137,7 +143,7 @@
       </div>
     </header>
 
-    <!-- Admin Panel -->
+    <!-- Admin Panel (admin-only) -->
     <div id="adminPanel" class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div>
@@ -149,7 +155,9 @@
         </div>
       </div>
 
-      <div class="admin-list" id="adminPanelList" style="margin-top:10px"></div>
+      <div class="admin-list" id="adminPanelList" style="margin-top:10px">
+        <!-- JS will populate checkboxes here -->
+      </div>
     </div>
 
     <main>
@@ -183,18 +191,6 @@
           <div class="form-row"><label><input type="checkbox" id="isProxy" /> Proxy?</label></div>
           <div id="proxyDetails" style="display:none"><div class="form-row"><label>Original</label><select id="originalFaculty"></select></div></div>
           <div class="form-row"><button id="submitAttendanceBtn">Submit Attendance</button><button id="cancelEditBtn" class="secondary" style="display:none">Cancel Edit</button></div>
-        </div>
-
-        <div id="regularStudentsWrap" class="panel">
-          <h3 class="panel-title">Regular Students (Summary)</h3>
-          <div style="max-height:220px; overflow:auto; margin-top:8px;">
-            <table id="regularStudentsTable" style="width:100%">
-              <thead>
-                <tr><th style="text-align:left">Roll</th><th style="text-align:left">Name</th><th style="text-align:right">Present</th><th style="text-align:right">Absent</th><th style="text-align:right">Total</th><th style="text-align:right">%</th></tr>
-              </thead>
-              <tbody id="regularStudentsBody"></tbody>
-            </table>
-          </div>
         </div>
 
         <div id="dailyPercentPanel" class="panel">
@@ -313,8 +309,8 @@
       const appContainer = document.getElementById("appContainer");
       const loginEmail = document.getElementById("loginEmail");
       const loginPassword = document.getElementById("loginPassword");
-      const loginSubmit = document.getElementById("loginSubmit");
-      const passwordToggle = document.getElementById("passwordToggle");
+      const togglePasswordBtn = document.getElementById("togglePasswordBtn");
+      const eyeIcon = document.getElementById("eyeIcon");
       const roleLabel = document.getElementById("roleLabel");
       const logoutBtn = document.getElementById("logoutBtn");
       const attendanceDate = document.getElementById("attendanceDate");
@@ -349,7 +345,6 @@
       const heatmapEl = document.getElementById("heatmap");
       const heatbarList = document.getElementById("heatbarList");
       const timelineEl = document.getElementById("timeline");
-      const regularStudentsBody = document.getElementById("regularStudentsBody");
       const leaderboardBody = document.getElementById("leaderboardBody");
 
       // admin refs + visibility
@@ -358,7 +353,6 @@
       const adminPanelList = document.getElementById('adminPanelList');
 
       const PANEL_MAP = [
-        { key: 'regularStudentsWrap', label: 'Regular Students (Summary)', selector: '#regularStudentsWrap' },
         { key: 'dailyPercentPanel', label: 'Daily Percent (recent days)', selector: '#dailyPercentPanel' },
         { key: 'monthlyHeatPanel', label: 'Monthly Heatmap (grid)', selector: '#monthlyHeatPanel' },
         { key: 'analyticsPanel', label: 'Attendance Analytics (Pie)', selector: '#analyticsPanel' },
@@ -378,9 +372,9 @@
         }
 
         // event wiring
-        loginSubmit.addEventListener("click", handleLogin);
+        document.getElementById('loginSubmit').addEventListener("click", handleLogin);
         loginPassword.addEventListener("keydown", e => { if(e.key==="Enter") handleLogin(); });
-        passwordToggle.addEventListener("click", togglePasswordVisibility);
+        togglePasswordBtn.addEventListener("click", togglePasswordVisibility);
         logoutBtn.addEventListener("click", logout);
         userTypeSel.addEventListener("change", onUserTypeChange);
         searchBox.addEventListener("input", renderList);
@@ -658,9 +652,9 @@
         const subEl = document.getElementById('attModalSubtitle');
         const content = document.getElementById('attModalContent');
         if(!record) return;
-        const date = record.date||'';
-        const lecture = record.lecture||'';
-        const total = record.total || (record.attendees?record.attendees.length:0);
+        const date = record.date || '';
+        const lecture = record.lecture || '';
+        const total = record.total || (record.attendees ? record.attendees.length : 0);
         let filtered = (record.attendees||[]).slice();
         if(filter==='present') filtered = filtered.filter(a=>String(a.status).toUpperCase()==='P');
         if(filter==='absent') filtered = filtered.filter(a=>String(a.status).toUpperCase()==='A');
@@ -670,12 +664,12 @@
         titleEl.textContent = `${lecture || 'Lecture'} — ${date}`;
         subEl.innerHTML = `<span class="record-meta">${filterLabel} • ${count}/${total} attendees</span>`;
 
-        const exportBtn = `<button class="record-action" id="exportRecordCsv" type="button" aria-label="Export record CSV">Export CSV</button>`;
+        const exportBtnHtml = `<button class="record-action" id="exportRecordCsv" type="button" aria-label="Export record CSV">Export CSV</button>`;
 
         if(!filtered.length){
-          content.innerHTML = `<div style="margin-bottom:8px">${exportBtn}</div><div class="att-modal-empty">No records for the selected filter.</div>`;
+          content.innerHTML = `<div style="margin-bottom:8px">${exportBtnHtml}</div><div class="att-modal-empty">No records for the selected filter.</div>`;
         } else {
-          let html = `<div style="margin-bottom:8px">${exportBtn}</div><table><thead><tr><th>Roll</th><th>Name</th><th>Status</th></tr></thead><tbody>`;
+          let html = `<div style="margin-bottom:8px">${exportBtnHtml}</div><table><thead><tr><th>Roll</th><th>Name</th><th>Status</th></tr></thead><tbody>`;
           filtered.forEach(a=>{ html += `<tr><td>${escapeHtml(a.roll)}</td><td>${escapeHtml(a.name)}</td><td>${String(a.status).toUpperCase() === 'P' ? 'P' : 'A'}</td></tr>`; });
           html += `</tbody></table>`;
           content.innerHTML = html;
@@ -738,7 +732,6 @@
         renderFacultySummary();
         renderTimeline();
         renderLeaderboard('top');
-        renderRegularStudentsSummary();
       }
 
       function renderStudentsPie(){
@@ -764,22 +757,6 @@
         faculty.forEach(f=>summary[f.name]={name:f.name,total:0,regular:0,proxy:0});
         records.forEach(r=>{ const facName = r.faculty||""; if(!facName||!summary[facName]) return; summary[facName].total++; if(r.proxy) summary[facName].proxy++; else summary[facName].regular++; });
         tbody.innerHTML = ""; Object.values(summary).forEach(row=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${row.name}</td><td>${row.total}</td><td>${row.regular}</td><td>${row.proxy}</td>`; tbody.appendChild(tr); });
-      }
-
-      function renderRegularStudentsSummary(){
-        if(!regularStudentsBody) return;
-        const map = {};
-        records.forEach(r => { (r.attendees||[]).forEach(a=>{ if(!map[a.roll]) map[a.roll] = { roll:a.roll, name:a.name, present:0, absent:0 }; if(String(a.status).toUpperCase()==='P') map[a.roll].present++; else map[a.roll].absent++; }); });
-        students.forEach(s => { if(!map[s.roll]) map[s.roll] = { roll:s.roll, name:s.name, present:0, absent:0 }; });
-        const rows = Object.values(map).sort((a,b)=>a.roll-b.roll);
-        regularStudentsBody.innerHTML = "";
-        rows.forEach(r=>{
-          const total = r.present + r.absent;
-          const pct = total ? ((r.present/total)*100).toFixed(1) : "0.0";
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td style="padding:8px 6px">${r.roll}</td><td style="padding:8px 6px">${escapeHtml(r.name)}</td><td style="padding:8px 6px;text-align:right">${r.present}</td><td style="padding:8px 6px;text-align:right">${r.absent}</td><td style="padding:8px 6px;text-align:right">${total}</td><td style="padding:8px 6px;text-align:right">${pct}%</td>`;
-          regularStudentsBody.appendChild(tr);
-        });
       }
 
       function renderHeatmap(){
@@ -963,23 +940,25 @@
           adminPanelList.appendChild(row);
         });
 
+        // set checkbox states from saved settings
         const saved = getHiddenPanels();
         adminPanelList.querySelectorAll('.admin-panel-checkbox').forEach(cb=>{
           const key = cb.getAttribute('data-panel');
-          cb.checked = !(saved && saved[key]); // saved stores hidden flags
+          cb.checked = (saved[key] === undefined) ? true : !!saved[key];
           cb.addEventListener('change', ()=> {
             const panel = PANEL_MAP.find(pp=>pp.key === key);
             if(panel){
               const el = document.querySelector(panel.selector);
               if(el) el.style.display = cb.checked ? '' : 'none';
             }
-            // save state immediately
-            const map = getHiddenPanels() || {};
-            map[key] = !cb.checked;
-            localStorage.setItem(ADMIN_VIS_KEY, JSON.stringify(map));
+            // save immediately
+            const map = getHiddenPanels();
+            map[key] = cb.checked;
+            try { localStorage.setItem(ADMIN_VIS_KEY, JSON.stringify(map)); } catch(e) {}
           });
         });
 
+        // admin panel visibility depends on role
         if(adminPanel) adminPanel.style.display = (currentRole === 'admin') ? '' : 'none';
       }
 
@@ -993,24 +972,38 @@
       }
 
       function applyHiddenPanels(){
-        const hidden = getHiddenPanels();
+        const saved = getHiddenPanels();
         PANEL_MAP.forEach(p => {
           const el = document.querySelector(p.selector);
           if(!el) return;
-          const hiddenFlag = hidden && hidden[p.key];
-          el.style.display = hiddenFlag ? 'none' : '';
+          const visible = (saved[p.key] === undefined) ? true : !!saved[p.key];
+          el.style.display = visible ? '' : 'none';
         });
         if(adminPanel) adminPanel.style.display = (currentRole === 'admin') ? '' : 'none';
       }
 
-      // password toggle
+      // ----------------------------
+      // Password toggle
+      // ----------------------------
       function togglePasswordVisibility(){
-        if(loginPassword.type === 'password'){
-          loginPassword.type = 'text';
-          passwordToggle.textContent = '🙈';
-        } else {
-          loginPassword.type = 'password';
-          passwordToggle.textContent = '👁️';
+        const isHidden = loginPassword.type === 'password';
+        loginPassword.type = isHidden ? 'text' : 'password';
+        togglePasswordBtn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+        // change icon: simple toggle between eye (open) and eye-off (we will invert pupil visibility)
+        const pupil = document.getElementById('pupil');
+        if(pupil){
+          pupil.style.display = isHidden ? 'block' : 'none';
+        }
+        // add an eye-off stroke when hiding
+        const eyePath = document.getElementById('eyePath');
+        if(eyePath){
+          if(!isHidden){
+            // show closed eye by adding a slash
+            eyePath.setAttribute('d','M17.94 17.94A10.97 10.97 0 0 1 12 20c-6 0-10-8-10-8a25.32 25.32 0 0 1 5.06-7.94M1 1l22 22');
+          } else {
+            // revert to default open eye path
+            eyePath.setAttribute('d','M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z');
+          }
         }
       }
 
