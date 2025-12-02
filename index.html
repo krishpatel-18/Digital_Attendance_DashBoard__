@@ -77,11 +77,16 @@
     .heatmap-grid{display:grid;grid-template-columns: repeat(7, 1fr); gap:6px; padding:8px}
     .heatday{height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#0b1220;background:#e5e7eb}
     .heat-legend{display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px;flex-wrap:wrap}
-    /* admin panel */
+    /* Admin panel styles */
     #adminPanel{display:none;margin-bottom:12px}
     .admin-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .admin-list{margin-top:8px;padding:10px;background:#fff;border-radius:8px}
     .is-hidden-panel{opacity:0.45}
+
+    /* password field wrapper */
+    .password-wrapper { position: relative; display: flex; align-items: center; }
+    .password-wrapper input { flex: 1; }
+    .password-toggle { position: absolute; right: 10px; background: transparent; border: none; cursor: pointer; font-size: 16px; padding: 6px; color: #374151; }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -102,7 +107,11 @@
       <label class="login-label" for="loginEmail">Email</label>
       <input id="loginEmail" type="email" class="login-input" placeholder="Enter email" />
       <label class="login-label" for="loginPassword">Password</label>
-      <input id="loginPassword" type="password" class="login-input" placeholder="Enter password" />
+      <div class="password-wrapper" style="margin-bottom:10px">
+        <input id="loginPassword" type="password" class="login-input" placeholder="Enter password" style="padding-right:40px" />
+        <button id="passwordToggle" class="password-toggle" type="button" aria-label="Show password">👁️</button>
+      </div>
+
       <button id="loginSubmit" class="login-btn"><span>🔒</span><span>Login</span></button>
 
       <div class="info-box">
@@ -127,6 +136,21 @@
         <span id="connectionStatus" style="font-size:12px;color:#fff;background:#22c55e;padding:4px 8px;border-radius:999px">Connected to Supabase</span>
       </div>
     </header>
+
+    <!-- Admin Panel -->
+    <div id="adminPanel" class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h3 style="margin:0">Admin: Visibility Controls</h3>
+          <div style="font-size:13px;color:#6b7280">Toggle which panels students/faculty see. Settings persist locally.</div>
+        </div>
+        <div class="admin-controls">
+          <button id="resetAdminVisibility" class="record-action">Reset Defaults</button>
+        </div>
+      </div>
+
+      <div class="admin-list" id="adminPanelList" style="margin-top:10px"></div>
+    </div>
 
     <main>
       <section class="left">
@@ -161,9 +185,19 @@
           <div class="form-row"><button id="submitAttendanceBtn">Submit Attendance</button><button id="cancelEditBtn" class="secondary" style="display:none">Cancel Edit</button></div>
         </div>
 
-        <!-- Removed: Attendance Reports (Visualization) as requested -->
+        <div id="regularStudentsWrap" class="panel">
+          <h3 class="panel-title">Regular Students (Summary)</h3>
+          <div style="max-height:220px; overflow:auto; margin-top:8px;">
+            <table id="regularStudentsTable" style="width:100%">
+              <thead>
+                <tr><th style="text-align:left">Roll</th><th style="text-align:left">Name</th><th style="text-align:right">Present</th><th style="text-align:right">Absent</th><th style="text-align:right">Total</th><th style="text-align:right">%</th></tr>
+              </thead>
+              <tbody id="regularStudentsBody"></tbody>
+            </table>
+          </div>
+        </div>
 
-        <div id="dailyPercentPanel" class="panel" data-panel="dailyPercentPanel">
+        <div id="dailyPercentPanel" class="panel">
           <h3 class="panel-title">Daily Percent (recent days)</h3>
           <div id="heatbarList" style="margin-top:8px"></div>
           <div class="heat-legend" style="margin-top:10px">
@@ -176,25 +210,13 @@
           </div>
         </div>
 
-        <div id="monthlyHeatPanel" class="panel" data-panel="monthlyHeatPanel">
+        <div id="monthlyHeatPanel" class="panel">
           <h3 class="panel-title">Monthly Heatmap (grid) — last 30 days</h3>
           <div id="heatmap" class="heatmap-grid" style="margin-top:8px"></div>
         </div>
       </section>
 
       <aside class="right">
-        <!-- Admin Panel (admin-only) -->
-        <div id="adminPanel" class="panel" aria-hidden="true">
-          <h3 class="panel-title">Admin Controls (show/hide panels)</h3>
-          <div class="admin-list" id="adminPanelList">
-            <!-- populated by JS for each panel -->
-          </div>
-          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-            <button id="savePanelVisibilityBtn" class="record-action">Save</button>
-            <button id="resetPanelVisibilityBtn" class="record-action">Reset</button>
-          </div>
-        </div>
-
         <div class="panel" id="todaySummaryPanel" data-panel="todaySummaryPanel">
           <h3 class="panel-title">Today's Summary</h3>
           <div class="summary"><p>Present today: <span id="presentCount">0</span></p><p>Absent today: <span id="absentCount">0</span></p><p>Lectures today: <span id="lecturesToday">0</span></p></div>
@@ -242,6 +264,7 @@
               <tbody id="leaderboardBody"></tbody>
             </table>
           </div>
+
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
             <button id="leaderTopBtn" class="record-action view" type="button">Show Top 10</button>
             <button id="leaderBottomBtn" class="record-action view" type="button">Show Bottom 10</button>
@@ -279,7 +302,7 @@
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   </script>
 
-  <!-- ========== MAIN JS (with admin visibility controls) ========= -->
+  <!-- ========== MAIN JS ========= -->
   <script>
     (function(){
       // state
@@ -291,6 +314,7 @@
       const loginEmail = document.getElementById("loginEmail");
       const loginPassword = document.getElementById("loginPassword");
       const loginSubmit = document.getElementById("loginSubmit");
+      const passwordToggle = document.getElementById("passwordToggle");
       const roleLabel = document.getElementById("roleLabel");
       const logoutBtn = document.getElementById("logoutBtn");
       const attendanceDate = document.getElementById("attendanceDate");
@@ -319,8 +343,6 @@
       const downloadCSVBtn = document.getElementById("downloadCSVBtn");
       const clearAllRecordsBtn = document.getElementById("clearAllRecordsBtn");
       const studentsStatsText = document.getElementById("studentsStatsText");
-      const downloadStudentsReportCsvBtn = document.getElementById("downloadStudentsReportCsv");
-      const downloadFacultyReportCsvBtn = document.getElementById("downloadFacultyReportCsv");
       const scanLogTbody = document.querySelector("#scanLogTable tbody");
 
       // visual containers
@@ -330,20 +352,20 @@
       const regularStudentsBody = document.getElementById("regularStudentsBody");
       const leaderboardBody = document.getElementById("leaderboardBody");
 
-      // admin refs
+      // admin refs + visibility
+      const ADMIN_VIS_KEY = 'tybca_hidden_panels_v2';
       const adminPanel = document.getElementById('adminPanel');
       const adminPanelList = document.getElementById('adminPanelList');
-      const SAVE_KEY = 'tybca_panel_visibility_v1';
 
-      // panels we allow admins to toggle
-      const TOGGLE_PANELS = [
-        { key: 'todaySummaryPanel', label: 'Today Summary', selector: '#todaySummaryPanel' },
-        { key: 'scanLogPanel', label: 'Scan Log', selector: '#scanLogPanel' },
-        { key: 'attendanceRecordsPanel', label: 'Attendance Records', selector: '#attendanceRecordsPanel' },
-        { key: 'analyticsPanel', label: 'Attendance Analytics (pie)', selector: '#analyticsPanel' },
-        { key: 'leaderboardPanel', label: 'Leaderboard', selector: '#leaderboardPanel' },
+      const PANEL_MAP = [
+        { key: 'regularStudentsWrap', label: 'Regular Students (Summary)', selector: '#regularStudentsWrap' },
         { key: 'dailyPercentPanel', label: 'Daily Percent (recent days)', selector: '#dailyPercentPanel' },
-        { key: 'monthlyHeatPanel', label: 'Monthly Heatmap (30d)', selector: '#monthlyHeatPanel' }
+        { key: 'monthlyHeatPanel', label: 'Monthly Heatmap (grid)', selector: '#monthlyHeatPanel' },
+        { key: 'analyticsPanel', label: 'Attendance Analytics (Pie)', selector: '#analyticsPanel' },
+        { key: 'leaderboardPanel', label: 'Leaderboard', selector: '#leaderboardPanel' },
+        { key: 'attendanceRecordsPanel', label: 'Attendance Records', selector: '#attendanceRecordsPanel' },
+        { key: 'todaySummaryPanel', label: "Today's Summary", selector: '#todaySummaryPanel' },
+        { key: 'scanLogPanel', label: 'Scan Log', selector: '#scanLogPanel' }
       ];
 
       // init
@@ -358,6 +380,7 @@
         // event wiring
         loginSubmit.addEventListener("click", handleLogin);
         loginPassword.addEventListener("keydown", e => { if(e.key==="Enter") handleLogin(); });
+        passwordToggle.addEventListener("click", togglePasswordVisibility);
         logoutBtn.addEventListener("click", logout);
         userTypeSel.addEventListener("change", onUserTypeChange);
         searchBox.addEventListener("input", renderList);
@@ -370,43 +393,33 @@
         cancelEditBtn.addEventListener("click", ()=>exitEditMode(false));
         downloadCSVBtn.addEventListener("click", downloadCSV);
         clearAllRecordsBtn.addEventListener("click", clearAllRecords);
-        downloadStudentsReportCsvBtn.addEventListener("click", ()=>downloadStudentsReport());
-        downloadFacultyReportCsvBtn.addEventListener("click", ()=>downloadFacultyReport());
         scanInput.addEventListener("keydown", e => { if(e.key==="Enter"){ const code=scanInput.value.trim(); scanInput.value=""; handleScan(code); }});
         lectureSelect.addEventListener("change", updateTimeFromLecture);
 
         // leaderboard controls
-        const leaderTopBtn = document.getElementById('leaderTopBtn');
-        const leaderBottomBtn = document.getElementById('leaderBottomBtn');
-        const leaderAllBtn = document.getElementById('leaderAllBtn');
-        if(leaderTopBtn) leaderTopBtn.addEventListener('click', ()=> renderLeaderboard('top'));
-        if(leaderBottomBtn) leaderBottomBtn.addEventListener('click', ()=> renderLeaderboard('bottom'));
-        if(leaderAllBtn) leaderAllBtn.addEventListener('click', ()=> renderLeaderboard('all'));
+        document.getElementById('leaderTopBtn')?.addEventListener('click', ()=> renderLeaderboard('top'));
+        document.getElementById('leaderBottomBtn')?.addEventListener('click', ()=> renderLeaderboard('bottom'));
+        document.getElementById('leaderAllBtn')?.addEventListener('click', ()=> renderLeaderboard('all'));
 
-        // modal hooks
         document.getElementById('attModalCloseBtn').addEventListener('click', closeAttendanceModal);
         document.getElementById('attModalBackdrop').addEventListener('click', function(e){ if(e.target===this) closeAttendanceModal(); });
 
-        // admin panel save/reset
-        document.getElementById('savePanelVisibilityBtn')?.addEventListener('click', savePanelVisibilityFromUI);
-        document.getElementById('resetPanelVisibilityBtn')?.addEventListener('click', resetPanelVisibility);
+        document.getElementById('resetAdminVisibility')?.addEventListener('click', ()=>{ localStorage.removeItem(ADMIN_VIS_KEY); applyHiddenPanels(); buildAdminList(); showAlert('Admin visibility reset'); });
 
         attendanceDate.value = new Date().toISOString().slice(0,10);
 
         // initial load
         await loadStudents(); await loadFaculty(); await loadLectures(); await loadAttendanceRecords();
-        populateLectures(); populateFacultySelects(); updateTimeFromLecture();
-        userTypeSel.value = "student"; setUserListForType(); applyRolePermissions();
+        populateLectures(); populateFacultySelects(); updateTimeFromLecture(); userTypeSel.value = "student"; setUserListForType(); applyRolePermissions();
         updateSummary(); renderAllCharts(); renderHeatmap();
 
-        // build admin UI and apply saved visibility
         buildAdminList();
-        applySavedVisibility();
+        applyHiddenPanels();
       }
 
-      // ----------------------------
-      // Auth + session handling
-      // ----------------------------
+      // -------------------------
+      // Authentication and session
+      // -------------------------
       async function handleLogin(){
         const email = loginEmail.value.trim(), password = loginPassword.value.trim();
         if(!email||!password){ showAlert("Please enter email and password"); return; }
@@ -421,10 +434,10 @@
 
       async function handleSessionUser(user){
         try{
-          // try to load role from users table; fallback to token role or 'student'
+          // read role from users table (if exists); default to 'student'
           const { data: userData, error } = await supabase.from("users").select("role, full_name").eq("id", user.id).maybeSingle();
           currentUser = user;
-          currentRole = (userData && userData.role) ? userData.role : (user.role || "student");
+          currentRole = (userData && userData.role) ? userData.role : "student";
           await enterApp();
         }catch(err){ console.error(err); showAlert("❌ Error loading user data"); }
       }
@@ -432,8 +445,7 @@
       async function logout(){
         try { await supabase.auth.signOut(); } catch(e){ console.warn('signOut error', e); }
         currentUser=null; currentRole=null; loginEmail.value=""; loginPassword.value="";
-        appContainer.style.display="none"; loginScreen.style.display="flex";
-        document.body.classList.remove("theme-main"); document.body.classList.add("theme-login");
+        appContainer.style.display="none"; loginScreen.style.display="flex"; document.body.classList.remove("theme-main"); document.body.classList.add("theme-login");
       }
 
       async function enterApp(){
@@ -443,7 +455,7 @@
         await loadStudents(); await loadFaculty(); await loadLectures(); await loadAttendanceRecords();
         populateLectures(); populateFacultySelects(); updateTimeFromLecture(); userTypeSel.value="student"; setUserListForType(); applyRolePermissions(); updateSummary(); renderAllCharts(); renderHeatmap();
         buildAdminList();
-        applySavedVisibility();
+        applyHiddenPanels();
       }
 
       function applyRolePermissions(){
@@ -466,7 +478,7 @@
       }
 
       // ----------------------------
-      // Data loading
+      // Data loaders
       // ----------------------------
       async function loadStudents(){ try{ const { data, error } = await supabase.from("students").select("*").order("roll_no",{ascending:true}); if(error) throw error; students = (data||[]).map(s=>({roll:s.roll_no,name:s.name,id:s.id})); }catch(err){ console.error(err); showAlert("❌ Error loading students"); } }
       async function loadFaculty(){ try{ const { data, error } = await supabase.from("faculty").select("*").order("roll_no",{ascending:true}); if(error) throw error; faculty = (data||[]).map(f=>({roll:f.roll_no,name:f.name,id:f.id})); }catch(err){ console.error(err); showAlert("❌ Error loading faculty"); } }
@@ -488,7 +500,7 @@
             original: r.original_faculty_name,
             presentCount: r.present_count,
             total: r.total_count,
-            attendees: (r.attendance_details||[]).map(d=>({roll:d.student_roll,name:d.student_name,status:d.status}))
+            attendees: (r.attendance_details||[]).map(d=>({roll:d.student_roll,name:d.student_name,status:(d.status||'').toString().toUpperCase()}))
           }));
           renderRecords();
         }catch(err){ console.error(err); showAlert("❌ Error loading attendance records"); } }
@@ -529,6 +541,7 @@
       function updateTimeFromLecture(){ const lecName = lectureSelect.value; const lec = lectures.find(l=>l.name===lecName); if(lec && lec.default_start_time && lec.default_end_time){ startTimeInput.value = lec.default_start_time; endTimeInput.value = lec.default_end_time; } else { startTimeInput.value=""; endTimeInput.value=""; } }
       function populateFacultySelects(){ const fill = el=>{ el.innerHTML=""; faculty.forEach(f=>{ const opt=document.createElement("option"); opt.value=f.name; opt.textContent=`${f.name} (${f.roll})`; el.appendChild(opt); }); }; fill(facultySelect); fill(originalFaculty); }
 
+      // submitAttendance
       async function submitAttendance(){
         const canEdit = currentRole==="admin"||currentRole==="faculty"; if(!canEdit){ showAlert("Only Admin and Faculty can submit attendance"); return; }
         const date = attendanceDate.value || new Date().toISOString().slice(0,10);
@@ -574,7 +587,7 @@
         if((!st || !en) && record.timeSlot){ const parts = record.timeSlot.split(" to "); st = parts[0]||""; en = parts[1]||""; }
         startTimeInput.value = st; endTimeInput.value = en;
         userTypeSel.value = "student"; setUserListForType();
-        currentList.forEach(p=>{ const found = (record.attendees||[]).find(a=>a.roll===p.roll); attendanceState[p.roll].present = found ? found.status==="P" : false; });
+        currentList.forEach(p=>{ const found = (record.attendees||[]).find(a=>a.roll===p.roll); attendanceState[p.roll].present = found ? (String(found.status).toUpperCase()==='P') : false; });
         renderList();
       }
 
@@ -626,8 +639,6 @@
             if(delBtn) delBtn.addEventListener("click", ()=>deleteSingleRecord(r.id));
           }
         });
-
-        applySavedVisibility(); // re-apply visibility to reflect any changes
       }
 
       async function deleteSingleRecord(recordId){
@@ -647,10 +658,12 @@
         const subEl = document.getElementById('attModalSubtitle');
         const content = document.getElementById('attModalContent');
         if(!record) return;
-        const date = record.date||'', lecture = record.lecture||'', total = record.total || (record.attendees?record.attendees.length:0);
+        const date = record.date||'';
+        const lecture = record.lecture||'';
+        const total = record.total || (record.attendees?record.attendees.length:0);
         let filtered = (record.attendees||[]).slice();
-        if(filter==='present') filtered = filtered.filter(a=>a.status==='P');
-        if(filter==='absent') filtered = filtered.filter(a=>a.status==='A');
+        if(filter==='present') filtered = filtered.filter(a=>String(a.status).toUpperCase()==='P');
+        if(filter==='absent') filtered = filtered.filter(a=>String(a.status).toUpperCase()==='A');
         const count = filtered.length;
         const filterLabel = filter==='all'?'All':(filter==='present'?'Present':'Absent');
 
@@ -663,7 +676,7 @@
           content.innerHTML = `<div style="margin-bottom:8px">${exportBtn}</div><div class="att-modal-empty">No records for the selected filter.</div>`;
         } else {
           let html = `<div style="margin-bottom:8px">${exportBtn}</div><table><thead><tr><th>Roll</th><th>Name</th><th>Status</th></tr></thead><tbody>`;
-          filtered.forEach(a=>{ html += `<tr><td>${escapeHtml(a.roll)}</td><td>${escapeHtml(a.name)}</td><td>${a.status === 'P' ? 'P' : 'A'}</td></tr>`; });
+          filtered.forEach(a=>{ html += `<tr><td>${escapeHtml(a.roll)}</td><td>${escapeHtml(a.name)}</td><td>${String(a.status).toUpperCase() === 'P' ? 'P' : 'A'}</td></tr>`; });
           html += `</tbody></table>`;
           content.innerHTML = html;
         }
@@ -707,7 +720,7 @@
         const presentSet = new Set();
         records.filter(r=>r.date===date).forEach(r=>{
           (r.attendees||[]).forEach(a=>{
-            if(a.status === "P") presentSet.add(a.roll);
+            if(String(a.status).toUpperCase() === "P") presentSet.add(a.roll);
           });
         });
         const present = presentSet.size;
@@ -732,7 +745,7 @@
         const date = attendanceDate.value || new Date().toISOString().slice(0,10);
         const todays = records.filter(r=>r.date===date);
         const presentRolls = new Set();
-        todays.forEach(r=>{ (r.attendees||[]).forEach(a=>{ if(a.status==='P') presentRolls.add(a.roll); }); });
+        todays.forEach(r=>{ (r.attendees||[]).forEach(a=>{ if(String(a.status).toUpperCase()==='P') presentRolls.add(a.roll); }); });
         const totalStudents = students.length;
         const present = presentRolls.size;
         const absent = Math.max(0, totalStudents - present);
@@ -756,16 +769,16 @@
       function renderRegularStudentsSummary(){
         if(!regularStudentsBody) return;
         const map = {};
-        records.forEach(r => { (r.attendees||[]).forEach(a=>{ if(!map[a.roll]) map[a.roll] = { roll:a.roll, name:a.name, present:0, absent:0 }; if(a.status==='P') map[a.roll].present++; else map[a.roll].absent++; }); });
+        records.forEach(r => { (r.attendees||[]).forEach(a=>{ if(!map[a.roll]) map[a.roll] = { roll:a.roll, name:a.name, present:0, absent:0 }; if(String(a.status).toUpperCase()==='P') map[a.roll].present++; else map[a.roll].absent++; }); });
         students.forEach(s => { if(!map[s.roll]) map[s.roll] = { roll:s.roll, name:s.name, present:0, absent:0 }; });
         const rows = Object.values(map).sort((a,b)=>a.roll-b.roll);
-        regularStudentsBody && (regularStudentsBody.innerHTML = "");
+        regularStudentsBody.innerHTML = "";
         rows.forEach(r=>{
           const total = r.present + r.absent;
           const pct = total ? ((r.present/total)*100).toFixed(1) : "0.0";
           const tr = document.createElement('tr');
           tr.innerHTML = `<td style="padding:8px 6px">${r.roll}</td><td style="padding:8px 6px">${escapeHtml(r.name)}</td><td style="padding:8px 6px;text-align:right">${r.present}</td><td style="padding:8px 6px;text-align:right">${r.absent}</td><td style="padding:8px 6px;text-align:right">${total}</td><td style="padding:8px 6px;text-align:right">${pct}%</td>`;
-          regularStudentsBody && regularStudentsBody.appendChild(tr);
+          regularStudentsBody.appendChild(tr);
         });
       }
 
@@ -782,7 +795,7 @@
           d.setDate(base.getDate() - i);
           const iso = d.toISOString().slice(0,10);
           let presentSet = new Set(), totalPossible = students.length || 0;
-          records.filter(r=>r.date===iso).forEach(r=>{ (r.attendees||[]).forEach(a=>{ if(a.status==='P') presentSet.add(a.roll); }); });
+          records.filter(r=>r.date===iso).forEach(r=>{ (r.attendees||[]).forEach(a=>{ if(String(a.status).toUpperCase()==='P') presentSet.add(a.roll); }); });
           const present = presentSet.size;
           const pct = totalPossible ? Math.round((present/totalPossible)*100) : 0;
           dailyPct.push({ date: iso, pct, present });
@@ -840,22 +853,50 @@
         });
       }
 
+      // ----------------------------
+      // Leaderboard: fixed ranking logic
+      // ----------------------------
       function renderLeaderboard(mode = 'top') {
         const tbody = document.getElementById('leaderboardBody');
         if(!tbody) return;
+
+        // Build aggregated map of student attendance
         const map = {};
-        records.forEach(r=> (r.attendees||[]).forEach(a=>{ if(!map[a.roll]) map[a.roll] = { roll: a.roll, name: a.name, present:0, absent:0 }; if(a.status === "P") map[a.roll].present++; else map[a.roll].absent++; }));
+        records.forEach(r=> (r.attendees||[]).forEach(a=>{
+          const roll = a.roll;
+          if(!map[roll]) map[roll] = { roll: roll, name: a.name, present:0, absent:0 };
+          const st = String(a.status || '').toUpperCase();
+          if(st === 'P') map[roll].present++;
+          else map[roll].absent++;
+        }));
+
+        // Ensure every student appears (so ordering/total is consistent)
+        students.forEach(s => {
+          if(!map[s.roll]) map[s.roll] = { roll: s.roll, name: s.name, present:0, absent:0 };
+        });
+
         const arr = Object.values(map);
         if(!arr.length){ tbody.innerHTML = `<tr><td colspan="6" style="padding:12px;color:#6b7280">No attendance data available</td></tr>`; return; }
+
+        // compute totals and pct
         arr.forEach(u => { u.total = (u.present||0) + (u.absent||0); u.pct = u.total ? (u.present / u.total * 100) : 0; });
-        arr.sort((a,b) => b.pct - a.pct);
+
+        // sort by percent DESC, then present DESC, then roll ASC
+        arr.sort((a,b) => {
+          if(b.pct !== a.pct) return b.pct - a.pct;
+          if(b.present !== a.present) return b.present - a.present;
+          return a.roll - b.roll;
+        });
+
         let list;
         if(mode === 'top') list = arr.slice(0, 10);
         else if(mode === 'bottom') list = arr.slice(-10).reverse();
         else list = arr;
+
+        // Build HTML with correct ranks (based on sorted arr)
         let html = '';
         list.forEach((s, idx) => {
-          const rank = (mode === 'bottom') ? (arr.length - (idx)) : (idx + 1);
+          const rank = arr.findIndex(x => x.roll === s.roll) + 1; // robust rank
           const pct = s.pct ? s.pct.toFixed(1) : '0.0';
           const cls = s.pct >= 75 ? 'leader-high' : (s.pct >= 25 ? 'leader-mid' : 'leader-low');
           html += `<tr>
@@ -883,9 +924,9 @@
       function addScanLogEntry(roll,name){ const now=new Date(); const timeStr=now.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}); const lecture = lectureSelect.value; scanLog.unshift({time:timeStr,roll,name,lecture}); if(scanLog.length>50) scanLog.pop(); renderScanLog(); }
       function renderScanLog(){ if(!scanLogTbody) return; scanLogTbody.innerHTML=""; scanLog.forEach(entry=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${entry.time}</td><td>${entry.roll}</td><td>${entry.name}</td><td>${entry.lecture}</td>`; scanLogTbody.appendChild(tr); }); }
 
-      function downloadCSV(){ const rows=[["Date","Day","Time","Lecture","LectureType","Faculty","Proxy","OriginalFaculty","Roll","Name","Status"]]; records.forEach(r=>{ r.attendees.forEach(a=>{ rows.push([r.date, r.day||"", r.timeSlot||"", r.lecture, r.lectureType||"", r.faculty||"", r.proxy ? "Yes":"No", r.original||"", a.roll, a.name, a.status]); }); }); const csv = rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n"); const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download="attendance_records.csv"; a.click(); URL.revokeObjectURL(url); }
+      function downloadCSV(){ const rows=[["Date","Day","Time","Lecture","LectureType","Faculty","Proxy","OriginalFaculty","Roll","Name","Status"]]; records.forEach(r=>{ (r.attendees||[]).forEach(a=>{ rows.push([r.date, r.day||"", r.timeSlot||"", r.lecture, r.lectureType||"", r.faculty||"", r.proxy ? "Yes":"No", r.original||"", a.roll, a.name, a.status]); }); }); const csv = rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n"); const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download="attendance_records.csv"; a.click(); URL.revokeObjectURL(url); }
 
-      function downloadStudentsReport(){ const map={}; records.forEach(r=>{ (r.attendees||[]).forEach(a=>{ if(!map[a.roll]) map[a.roll]={roll:a.roll,name:a.name,present:0,absent:0}; if(a.status==='P') map[a.roll].present++; else if(a.status==='A') map[a.roll].absent++; }); }); const rows=[["Roll No","Name","Total Present","Total Absent","Total Days","Attendance %"]]; Object.values(map).sort((a,b)=>a.roll-b.roll).forEach(r=>{ const totalDays=r.present+r.absent; const pct = totalDays?((r.present/totalDays)*100).toFixed(1):"0.0"; rows.push([r.roll,r.name,r.present,r.absent,totalDays,pct+"%"]); }); const csv = rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n"); const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download="students_report.csv"; a.click(); URL.revokeObjectURL(url); }
+      function downloadStudentsReport(){ const map={}; records.forEach(r=>{ (r.attendees||[]).forEach(a=>{ if(!map[a.roll]) map[a.roll]={roll:a.roll,name:a.name,present:0,absent:0}; if(String(a.status).toUpperCase()==='P') map[a.roll].present++; else if(String(a.status).toUpperCase()==='A') map[a.roll].absent++; }); }); const rows=[["Roll No","Name","Total Present","Total Absent","Total Days","Attendance %"]]; Object.values(map).sort((a,b)=>a.roll-b.roll).forEach(r=>{ const totalDays=r.present+r.absent; const pct = totalDays?((r.present/totalDays)*100).toFixed(1):"0.0"; rows.push([r.roll,r.name,r.present,r.absent,totalDays,pct+"%"]); }); const csv = rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n"); const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download="students_report.csv"; a.click(); URL.revokeObjectURL(url); }
 
       function downloadFacultyReport(){ const summary={}; faculty.forEach(f=>summary[f.name]={name:f.name,total:0,regular:0,proxy:0}); records.forEach(r=>{ const facName=r.faculty||""; if(!facName||!summary[facName]) return; summary[facName].total++; if(r.proxy) summary[facName].proxy++; else summary[facName].regular++; }); const rows=[["Faculty Name","Total Lectures","Regular","Proxy"]]; Object.values(summary).forEach(r=>rows.push([r.name,r.total,r.regular,r.proxy])); const csv = rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n"); const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download="faculty_report.csv"; a.click(); URL.revokeObjectURL(url); }
 
@@ -907,7 +948,7 @@
       function buildAdminList(){
         if(!adminPanelList) return;
         adminPanelList.innerHTML = '';
-        TOGGLE_PANELS.forEach(p=>{
+        PANEL_MAP.forEach(p=>{
           const row = document.createElement('div');
           row.style.display = 'flex';
           row.style.alignItems = 'center';
@@ -922,63 +963,55 @@
           adminPanelList.appendChild(row);
         });
 
-        // set checkbox states from saved settings
-        const saved = getSavedVisibility();
+        const saved = getHiddenPanels();
         adminPanelList.querySelectorAll('.admin-panel-checkbox').forEach(cb=>{
           const key = cb.getAttribute('data-panel');
-          cb.checked = (saved[key] === undefined) ? true : !!saved[key];
+          cb.checked = !(saved && saved[key]); // saved stores hidden flags
           cb.addEventListener('change', ()=> {
-            // reflect immediately to UI
-            const panel = TOGGLE_PANELS.find(pp=>pp.key === key);
+            const panel = PANEL_MAP.find(pp=>pp.key === key);
             if(panel){
               const el = document.querySelector(panel.selector);
               if(el) el.style.display = cb.checked ? '' : 'none';
             }
+            // save state immediately
+            const map = getHiddenPanels() || {};
+            map[key] = !cb.checked;
+            localStorage.setItem(ADMIN_VIS_KEY, JSON.stringify(map));
           });
         });
 
-        // admin panel visibility depends on role
         if(adminPanel) adminPanel.style.display = (currentRole === 'admin') ? '' : 'none';
       }
 
-      function getSavedVisibility(){
+      function getHiddenPanels(){
         try {
-          const raw = localStorage.getItem(SAVE_KEY);
+          const raw = localStorage.getItem(ADMIN_VIS_KEY);
           return raw ? JSON.parse(raw) : {};
         } catch(e){
           return {};
         }
       }
 
-      function savePanelVisibilityFromUI(){
-        const map = {};
-        adminPanelList.querySelectorAll('.admin-panel-checkbox').forEach(cb=>{
-          const key = cb.getAttribute('data-panel');
-          map[key] = !!cb.checked;
-        });
-        try { localStorage.setItem(SAVE_KEY, JSON.stringify(map)); showAlert('✅ Panel visibility saved'); } catch(e){ console.warn(e); showAlert('Failed to save visibility'); }
-      }
-
-      function resetPanelVisibility(){
-        try {
-          localStorage.removeItem(SAVE_KEY);
-          buildAdminList();
-          applySavedVisibility();
-          showAlert('Reset to defaults');
-        } catch(e){ console.warn(e); showAlert('Reset failed'); }
-      }
-
-      function applySavedVisibility(){
-        const saved = getSavedVisibility();
-        TOGGLE_PANELS.forEach(p => {
+      function applyHiddenPanels(){
+        const hidden = getHiddenPanels();
+        PANEL_MAP.forEach(p => {
           const el = document.querySelector(p.selector);
           if(!el) return;
-          // default visible if not set
-          const visible = (saved[p.key] === undefined) ? true : !!saved[p.key];
-          el.style.display = visible ? '' : 'none';
+          const hiddenFlag = hidden && hidden[p.key];
+          el.style.display = hiddenFlag ? 'none' : '';
         });
-        // admin panel visible only for admin role
         if(adminPanel) adminPanel.style.display = (currentRole === 'admin') ? '' : 'none';
+      }
+
+      // password toggle
+      function togglePasswordVisibility(){
+        if(loginPassword.type === 'password'){
+          loginPassword.type = 'text';
+          passwordToggle.textContent = '🙈';
+        } else {
+          loginPassword.type = 'password';
+          passwordToggle.textContent = '👁️';
+        }
       }
 
       // start
