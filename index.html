@@ -6,7 +6,7 @@
   <title>TYBCA Attendance Dashboard - Supabase</title>
   <style>
     :root{--panel:#ffffff;--accent:#0f9d58;--muted:#6b7280}
-    .theme-login{--bg:radial-gradient(circle at top left,#7b2ff7,#5a2fd6,#5826c4,#7520b7,#9121b4,#b623b5,#d72ab8);}
+    .theme-login{--bg:radial-gradient(circle at top left,#7b2ff7,#5a2fd6,#5826c4,#7520b7,#9121b4,#b623b5,#d72ab8); }
     .theme-main{--bg:radial-gradient(circle at top left,#7b2ff7,#5a2fd6,#5826c4,#7520b7,#9121b4,#b623b5,#d72ab8);--accent:#0077ff}
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:#111827;min-height:100vh;padding:16px;transition:background 0.4s ease}
@@ -78,9 +78,9 @@
     .kpi-label{font-size:12px;color:#6b7280}
     /* password input with eye button */
     .pwd-wrap{position:relative}
-    .pwd-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;padding:6px;border-radius:6px;cursor:pointer}
-    .pwd-toggle svg{width:20px;height:20px;opacity:0.95}
-    .pwd-toggle:focus{outline:2px solid rgba(59,130,246,0.35);}
+    .pwd-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:transparent;border:none;padding:6px;border-radius:6px;cursor:pointer;z-index:3;color:#6b7280;display:inline-flex;align-items:center;justify-content:center}
+    .pwd-toggle svg{width:20px;height:20px;opacity:0.95;stroke:currentColor;fill:none}
+    .pwd-toggle:focus{outline:2px solid rgba(59,130,246,0.35);box-shadow:0 0 0 3px rgba(59,130,246,0.12)}
     #timeline .timeline-item {display:flex;gap:8px;align-items:center;margin-bottom:8px}
     .bar{height:10px;background:#f3f4f6;border-radius:999px;overflow:hidden}
     .bar-fill{height:100%;width:0%;background:#10b981;border-radius:999px}
@@ -108,10 +108,17 @@
       <input id="loginEmail" type="email" class="login-input" placeholder="Enter email" />
       <label class="login-label" for="loginPassword">Password</label>
 
-      <!-- Password field with visible toggle button (eye / eye-off) -->
+      <!-- Password field with visible toggle button (eye / eye-off)
+           Inline default SVG provided so icon is visible even before JS runs -->
       <div class="pwd-wrap">
-        <input id="loginPassword" type="password" class="login-input" placeholder="Enter password" style="padding-right:48px" />
-        <button id="pwdToggleBtn" class="pwd-toggle" aria-label="Show password" title="Show password" type="button"></button>
+        <input id="loginPassword" type="password" class="login-input" placeholder="Enter password" style="padding-right:52px" />
+        <button id="pwdToggleBtn" class="pwd-toggle" aria-label="Show password" title="Show password" type="button">
+          <!-- default eye icon (visible by default) -->
+          <svg viewBox="0 0 24 24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8S2 12 2 12z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
       </div>
 
       <button id="loginSubmit" class="login-btn"><span>🔒</span><span>Login</span></button>
@@ -221,7 +228,7 @@
           <canvas id="studentsPie" height="110"></canvas>
         </div>
 
-        <!-- New: KPI row + trend + alerts replacing Leaderboard -->
+        <!-- Overview replacing Leaderboard -->
         <div class="panel" id="overviewPanel">
           <h3 class="panel-title">Overview</h3>
           <div class="kpi-row" style="margin-top:8px">
@@ -251,7 +258,7 @@
           </div>
         </div>
 
-        <!-- Faculty Summary panel -->
+        <!-- Faculty Summary panel (after pie chart) -->
         <div class="panel" id="facultySummaryPanel" data-panel="facultySummaryPanel">
           <h3 class="panel-title">Faculty Summary</h3>
           <div style="font-size:13px;color:#6b7280;margin-top:6px">Summary of lectures by faculty (total / regular / proxy)</div>
@@ -358,8 +365,8 @@
 
       // password toggle wiring
       const pwdToggleBtn = document.getElementById('pwdToggleBtn');
-      const eyeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
-      const eyeOffIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-6 0-10-8-10-8a18.65 18.65 0 0 1 5.11-7.03"></path><path d="M1 1l22 22"></path><path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"></path></svg>`;
+      const eyeIcon = `<svg viewBox="0 0 24 24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+      const eyeOffIcon = `<svg viewBox="0 0 24 24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-6 0-10-8-10-8a18.65 18.65 0 0 1 5.11-7.03"></path><path d="M1 1l22 22"></path><path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"></path></svg>`;
 
       // init
       async function init(){
@@ -388,9 +395,10 @@
         scanInput.addEventListener("keydown", e => { if(e.key==="Enter"){ const code=scanInput.value.trim(); scanInput.value=""; handleScan(code); }});
         lectureSelect.addEventListener("change", updateTimeFromLecture);
 
-        // password toggle
+        // password toggle wiring (ensures visibility + keyboard support)
         if(pwdToggleBtn){
-          pwdToggleBtn.innerHTML = eyeIcon;
+          // set default (in case the inline svg is overridden)
+          if(!pwdToggleBtn.innerHTML.trim()) pwdToggleBtn.innerHTML = eyeIcon;
           pwdToggleBtn.setAttribute('aria-label','Show password');
           pwdToggleBtn.title = 'Show password';
           pwdToggleBtn.addEventListener('click', ()=>{
@@ -407,6 +415,11 @@
               pwdToggleBtn.title = 'Show password';
             }
             pwdToggleBtn.focus();
+          });
+
+          // allow toggling with Enter/Space when focused
+          pwdToggleBtn.addEventListener('keydown', (e)=>{
+            if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pwdToggleBtn.click(); }
           });
         }
 
@@ -772,7 +785,7 @@
       }
 
       function renderRegularStudentsSummary(){
-        // Not visible unless you add the panel; kept for compatibility
+        // kept for compatibility (no separate panel shown by design)
       }
 
       function renderHeatmap(){
@@ -853,12 +866,10 @@
         renderRecentAlerts();
       }
 
-      // KPI: avg attendance last 7 days, best day in last 30 days
       function renderOverviewKPIs(){
         const today = new Date(attendanceDate.value || new Date().toISOString().slice(0,10));
         const formatDate = d => d.toISOString().slice(0,10);
 
-        // last 7 days average percent
         let sumPct = 0, countDays = 0;
         for(let i=6;i>=0;i--){
           const d = new Date(today); d.setDate(today.getDate() - i);
@@ -869,7 +880,6 @@
         const avg7 = countDays ? (sumPct / countDays) : 0;
         kpiAvg7d.textContent = `${avg7 ? avg7.toFixed(1) : '0.0'}%`;
 
-        // best day last 30 days
         let best = { date: null, pct: -1 };
         for(let i=29;i>=0;i--){
           const d = new Date(today); d.setDate(today.getDate() - i);
@@ -880,7 +890,6 @@
         kpiBestDay.textContent = best.date ? `${best.date} • ${best.pct}%` : 'N/A';
       }
 
-      // Return { total, present, pct }
       function computeDayPercent(isoDate){
         let presentSet = new Set(), totalPossible = students.length || 0;
         records.filter(r=>r.date===isoDate).forEach(r=>{ (r.attendees||[]).forEach(a=>{ if(a.status==='P') presentSet.add(a.roll); }); });
@@ -889,7 +898,6 @@
         return { total: totalPossible, present, pct };
       }
 
-      // Attendance trend chart for last 7 days
       function renderAttendanceTrend(){
         const ctx = trendCanvas.getContext('2d');
         const today = new Date(attendanceDate.value || new Date().toISOString().slice(0,10));
@@ -914,7 +922,6 @@
         });
       }
 
-      // Recent alerts: low attendance sessions (<30%) in last 7 days and recent records
       function renderRecentAlerts(){
         if(!alertsList) return;
         alertsList.innerHTML = "";
@@ -922,7 +929,6 @@
         const threshold = 30;
         const today = new Date(attendanceDate.value || new Date().toISOString().slice(0,10));
         const formatDate = d => d.toISOString().slice(0,10);
-        // scan records from last 7 days
         for(let i=0;i<7;i++){
           const d = new Date(today); d.setDate(today.getDate() - i);
           const iso = formatDate(d);
@@ -931,12 +937,10 @@
             if(pct < threshold){
               alerts.push({ date: iso, lecture: r.lecture, faculty: r.faculty, pct, type: 'low' });
             } else {
-              // include recent sessions as informational
               alerts.push({ date: iso, lecture: r.lecture, faculty: r.faculty, pct, type: 'info' });
             }
           });
         }
-        // sort alerts: low first, newest first
         alerts.sort((a,b)=> {
           if(a.type !== b.type) return a.type==='low' ? -1 : 1;
           return b.date.localeCompare(a.date);
