@@ -199,19 +199,6 @@
           </div>
         </div>
 
-        <div id="dailyPercentPanel" class="panel" data-panel="dailyPercentPanel">
-          <h3 class="panel-title">Daily Percent (recent days)</h3>
-          <div id="heatbarList" style="margin-top:8px"></div>
-          <div class="heat-legend" style="margin-top:10px">
-            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#065f46;border-radius:3px"></div><div>90-100%</div></div>
-            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#10b981;border-radius:3px"></div><div>75-89%</div></div>
-            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#84cc16;border-radius:3px"></div><div>50-74%</div></div>
-            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#f59e0b;border-radius:3px"></div><div>25-49%</div></div>
-            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#f97316;border-radius:3px"></div><div>1-24%</div></div>
-            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#e5e7eb;border-radius:3px"></div><div>0%</div></div>
-          </div>
-        </div>
-
         <div id="detailsViewPanel" class="panel" style="display:none;">
           <h3 class="panel-title" id="detailsViewTitle">Selected Record Details</h3>
           <button id="closeDetailsBtn" class="secondary" style="margin-bottom:8px;font-size:12px">Close Details</button>
@@ -222,6 +209,19 @@
               </thead>
               <tbody id="detailsViewBody"></tbody>
             </table>
+          </div>
+        </div>
+
+        <div id="dailyPercentPanel" class="panel" data-panel="dailyPercentPanel">
+          <h3 class="panel-title">Daily Percent (recent days)</h3>
+          <div id="heatbarList" style="margin-top:8px"></div>
+          <div class="heat-legend" style="margin-top:10px">
+            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#065f46;border-radius:3px"></div><div>90-100%</div></div>
+            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#10b981;border-radius:3px"></div><div>75-89%</div></div>
+            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#84cc16;border-radius:3px"></div><div>50-74%</div></div>
+            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#f59e0b;border-radius:3px"></div><div>25-49%</div></div>
+            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#f97316;border-radius:3px"></div><div>1-24%</div></div>
+            <div class="heat-legend-item"><div style="width:16px;height:12px;background:#e5e7eb;border-radius:3px"></div><div>0%</div></div>
           </div>
         </div>
 
@@ -621,7 +621,6 @@
         const facultyName = facultySelect.value; const proxy = isProxy.checked; const original = originalFaculty.value || "";
         const startTime = startTimeInput.value || ""; const endTime = endTimeInput.value || ""; const timeSlot = startTime && endTime ? `${startTime} to ${endTime}` : "";
         
-        // Use Strict String Roll Key
         const attendees = currentList.map(p=>{
             const rollKey = String(p.roll);
             const isPresent = attendanceState[rollKey] && attendanceState[rollKey].present;
@@ -665,27 +664,56 @@
       }
 
       function enterEditMode(recordId, record){
-        attendanceState = {};
-
-        isEditing = true; currentEditRecordId = recordId; submitBtn.textContent = "Update Attendance"; cancelEditBtn.style.display = "inline-flex";
-        attendanceDate.value = record.date; lectureSelect.value = record.lecture; lectureTypeSelect.value = record.lectureType || "Regular"; daySelect.value = record.day || "Monday"; facultySelect.value = record.faculty || (faculty[0] && faculty[0].name);
-        isProxy.checked = !!record.proxy; proxyDetails.style.display = isProxy.checked ? "block" : "none"; originalFaculty.value = record.original || facultySelect.value;
+        isEditing = true; 
+        currentEditRecordId = recordId; 
+        submitBtn.textContent = "Update Attendance"; 
+        cancelEditBtn.style.display = "inline-flex";
+        
+        // 1. Set form fields
+        attendanceDate.value = record.date; 
+        lectureSelect.value = record.lecture; 
+        lectureTypeSelect.value = record.lectureType || "Regular"; 
+        daySelect.value = record.day || "Monday"; 
+        facultySelect.value = record.faculty || (faculty[0] && faculty[0].name);
+        isProxy.checked = !!record.proxy; 
+        proxyDetails.style.display = isProxy.checked ? "block" : "none"; 
+        originalFaculty.value = record.original || facultySelect.value;
         let st = record.startTime || ""; let en = record.endTime || "";
         if((!st || !en) && record.timeSlot){ const parts = record.timeSlot.split(" to "); st = parts[0]||""; en = parts[1]||""; }
-        startTimeInput.value = st; endTimeInput.value = en;
+        startTimeInput.value = st; 
+        endTimeInput.value = en;
+        
+        // 2. IMPORTANT: Force list type to Student and RESET Filter
         userTypeSel.value = "student"; 
+        sortSelect.value = ""; 
+
+        // 3. Reset the current list based on ALL students
+        currentList = (students || []).map(x => ({...x})); 
         
-        const type = userTypeSel.value; 
-        currentList = (type==="student"?students:faculty).map(x=>({...x})); 
-        
-        // Strict String comparison to load existing state
-        currentList.forEach(p=>{ 
-            const rollKey = String(p.roll);
-            const found = (record.attendees||[]).find(a=>String(a.roll) === rollKey); 
-            attendanceState[rollKey] = { present: found ? found.status==="P" : false }; 
+        // 4. Initialize attendanceState for EVERY student
+        attendanceState = {};
+        currentList.forEach(p => {
+            attendanceState[String(p.roll)] = { present: false };
         });
+
+        // 5. Mark Present students from the record
+        if(record.attendees && record.attendees.length > 0){
+            record.attendees.forEach(a => {
+                if(a.status === 'P'){
+                    const key = String(a.roll);
+                    if(attendanceState[key]){
+                        attendanceState[key].present = true;
+                    }
+                }
+            });
+        }
         
+        // 6. Render the list with the ticked boxes
         renderList();
+        
+        // Scroll to top
+        document.querySelector('.left').scrollIntoView({ behavior: 'smooth' });
+        showAlert("Editing: " + record.lecture);
       }
 
       function exitEditMode(silent){
